@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/eiannone/keyboard"
 	"github.com/gorilla/websocket"
 	xterm "golang.org/x/term"
@@ -17,6 +18,14 @@ import (
 
 func main() {
 
+	if TerminalWebsocket() {
+		log.Println("Done")
+		return
+	}
+
+}
+
+func TerminalWebsocket() (isDone bool) {
 	// Get the file descriptor of the terminal
 	fd := int(os.Stdout.Fd())
 
@@ -38,16 +47,6 @@ func main() {
 			}
 		}
 	}()
-
-	if TerminalWebsocket(sizeCh) {
-
-		log.Println("Done")
-		return
-	}
-
-}
-
-func TerminalWebsocket(sizeCh chan [2]int) (isDone bool) {
 	// isKeyboardSet := false
 
 	isDone = true
@@ -111,16 +110,7 @@ func TerminalWebsocket(sizeCh chan [2]int) (isDone bool) {
 		}
 	}()
 
-	// Create a scanner to read from the standard input
-	// scanner := bufio.NewScanner(os.Stdin)
-
-	// Loop until done or interrupted
-
-	// if err := keyboard.Open(); err != nil {
-	// 	panic(err)
-	// }
-
-	keyEvent, err := keyboard.GetKeys(1)
+	keyEvent, err := keyboard.GetKeys(128)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -163,18 +153,12 @@ func TerminalWebsocket(sizeCh chan [2]int) (isDone bool) {
 
 		case ev := <-keyEvent:
 
+			// fmt.Printf("`")
+
 			if ctrlCExit {
 				fmt.Fprintf(os.Stderr, "\nPress ctrl-c again to exit session\n")
 			}
-			// Scan for input from the standard input
-			// if !scanner.Scan() {
-			// 	return
-			// }
-			// // Get the input text
-			// text := scanner.Text()
-			// encodedText := b64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s\n", text)))
-			// encodedText = "1" + encodedText
-			// log.Println("Will send", encodedText)
+
 			char, key, err := ev.Rune, ev.Key, ev.Err
 			if err != nil {
 				panic(err)
@@ -195,7 +179,6 @@ func TerminalWebsocket(sizeCh chan [2]int) (isDone bool) {
 
 			// fmt.Printf("%c", char)
 
-			// var b byte
 			var byteArr []byte
 			if key != 0 {
 				switch key {
@@ -207,16 +190,29 @@ func TerminalWebsocket(sizeCh chan [2]int) (isDone bool) {
 					byteArr = []byte{27, 91, 68}
 				case keyboard.KeyArrowRight:
 					byteArr = []byte{27, 91, 67}
+				case keyboard.KeyEsc:
+					if char > 0 {
+						data, err := clipboard.ReadAll()
+						if err == nil {
+							byteArr = []byte(data)
+						} else {
+							byteArr = []byte{byte(key)}
+						}
+
+					} else {
+						byteArr = []byte{byte(key)}
+					}
 				default:
 					byteArr = []byte{byte(key)}
 				}
+				// log.Println("I pressed", char, "key", key, "byte", byteArr, "string", string(byteArr))
 
 			} else {
 				byteArr = []byte{byte(char)}
 			}
 
 			// log.Println("I pressed", char, "key", key, "byte", byteArr, "string", string(byteArr))
-
+			// fmt.Printf("%s", string(byteArr))
 			encodedText := b64.StdEncoding.EncodeToString(byteArr)
 
 			if key == keyboard.KeyHome {
@@ -229,7 +225,7 @@ func TerminalWebsocket(sizeCh chan [2]int) (isDone bool) {
 			}
 
 			wstext := "1" + encodedText
-
+			_ = wstext
 			// Write a text message to the WebSocket connection
 			erre := conn.WriteMessage(websocket.TextMessage, []byte(wstext))
 			if erre != nil {

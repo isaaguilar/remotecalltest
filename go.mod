@@ -10,6 +10,7 @@ require (
 require golang.org/x/term v0.11.0 // indirect
 
 require (
+	github.com/atotto/clipboard v0.1.4
 	golang.org/x/crypto v0.12.0
 	golang.org/x/sys v0.11.0 // indirect
 )
